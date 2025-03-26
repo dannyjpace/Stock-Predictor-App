@@ -4,13 +4,14 @@ import numpy as np
 import plotly.express as px
 import requests
 from io import StringIO
-import openai
+from openai import OpenAI  # ✅ NEW API
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import LSTM, Dense, Dropout
 from sklearn.preprocessing import MinMaxScaler
 
-# ---- LLM API KEY ----
-openai.api_key = st.secrets["OPENAI_API_KEY"]  # put in .streamlit/secrets.toml
+# ---- LLM CLIENT ----
+client = OpenAI()
+openai_api_key = st.secrets["OPENAI_API_KEY"]
 
 # ---- GITHUB CSV FILES ----
 GITHUB_RAW_BASE = "https://raw.githubusercontent.com/dannyjpace/Stock-Predictor-App/main/"
@@ -122,6 +123,7 @@ dates_future = pd.date_range(start=selected_df["Date"].max(), periods=days_ahead
 pred_df = pd.DataFrame({"Date": dates_future, "Predicted Price": pred_prices})
 full_df = pd.concat([selected_df[["Date", "Close"]], pred_df.rename(columns={"Predicted Price": "Close"})])
 
+# ---- DISPLAY ----
 st.subheader("Latest Stock Price")
 latest_price = selected_df["Close"].iloc[-1]
 st.metric(label=f"{ticker} Latest Price", value=f"${latest_price:,.2f}")
@@ -138,27 +140,28 @@ st.write(f"Momentum: {selected_df['Close'].pct_change().mean():.4f}")
 st.subheader("Forecasted Prices")
 st.dataframe(pred_df)
 
-# ---- LLM Insight ----
-if st.checkbox("Generate Market Insight with LLM"):
+# ---- LLM INSIGHT ----
+if st.checkbox("✅ Generate Market Insight with LLM"):
     trend = "rising" if pred_prices[-1] > pred_prices[0] else "falling" if pred_prices[-1] < pred_prices[0] else "stable"
-
     prompt = f"""
-    Based on the macroeconomic inputs:
+    Based on the following macroeconomic inputs:
     - Inflation Rate: {inflation}%
     - GDP Growth: {gdp_growth}%
     - Interest Rate: {interest_rate}%
-    - Unemployment: {unemployment}%
-    - 10Y Treasury Yield: {treasury_yield}%
+    - Unemployment Rate: {unemployment}%
+    - 10-Year Treasury Yield: {treasury_yield}%
 
     And the predicted stock trend for {ticker} over the next {days_ahead} days, which is {trend},
-    generate a short 2-3 sentence market commentary for a business analyst.
+    write a short 2-3 sentence explanation of the investment outlook for a business analyst.
     """
 
-    response = openai.ChatCompletion.create(
-        model="gpt-3.5-turbo",
-        messages=[{"role": "user", "content": prompt}],
-        temperature=0.7,
-    )
-
-    st.subheader("LLM Market Insight")
-    st.info(response["choices"][0]["message"]["content"])
+    try:
+        response = client.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.7,
+        )
+        st.subheader("🤖 LLM Market Insight")
+        st.info(response.choices[0].message.content)
+    except Exception as e:
+        st.error(f"LLM Error: {e}")
