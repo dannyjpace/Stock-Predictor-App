@@ -1,7 +1,8 @@
+openai
 streamlit
-pandas
-numpy
-plotly
-joblib
-scikit-learn
 tensorflow
+scikit-learn
+numpy
+pandas
+plotly
+requests
